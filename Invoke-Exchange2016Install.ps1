@@ -6,6 +6,7 @@
         Write Progress?
         Multiple Servers?
         Email report?
+        Parameter Org NAME
         Parameter for ISO Name/location?
         Parameter for install location?
         Error checking:
@@ -26,13 +27,22 @@ function Invoke-ExchangeServerInstall {
         [Parameter(ValueFromPipeline=$true,
         ValueFromPipelineByPropertyName=$true)]
         $ComputerName = $ENV:COMPUTERNAME,
-
+        
+        [Parameter()]
+        $ExchangeISO = 'ExchangeServer2016-x64-CU15.ISO',
+        
         [Parameter()]
         [switch]$InstallWindowsComponents,
 
         [Parameter()]
         [switch]$InstallPreReqs,
 
+        [Parameter()]
+        $InstallPath = 'F:\Microsoft\Exchange Server\V15\',
+        
+        [Parameter()]
+        $OrgName = 'Homelabz',
+        
         [Parameter()]
         [switch]$PrepareAD,
 
@@ -50,7 +60,7 @@ function Invoke-ExchangeServerInstall {
             Write-Verbose "Staging folder does not exist! Creating new directory at $StagingLocation"
             New-Item $StagingLocation -ItemType Directory -Force
         }
-        if($InstallPreReqs){
+        <#if($InstallPreReqs){
             # setup download client
             $webclient = New-Object System.Net.WebClient
 
@@ -70,9 +80,13 @@ function Invoke-ExchangeServerInstall {
             Write-Verbose 'Downloading Unified Communications Managed API 4.0 Runtime'
             $downloadurl = "https://download.microsoft.com/download/2/C/4/2C47A5C1-A1F3-4843-B9FE-84C0032C61EC/UcmaRuntimeSetup.exe"
             $webclient.Downloadfile($downloadurl, "$StagingLocation\ucmaRuntimeSetup.exe")
-        }
+        }#>
     }
     process {
+        if($InstallWindowsComponents){
+            # install windows features
+            Install-WindowsFeature ADLDS,NET-Framework-45-Features, Server-Media-Foundation, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS
+
         if($InstallPreReqs){
             # install .Net 4.8
             Start-Process "$StagingLocation\ndp48-x86-x64-allos-enu.exe" -ArgumentList "/q /log $StagingLocation\ndp48.log" -Wait -Verbose
@@ -88,20 +102,16 @@ function Invoke-ExchangeServerInstall {
             # install Unified Communications Managed API 4.0 Runtime 
             Write-Verbose 'Installing Unified Communications Managed API 4.0 Runtime'
             Start-Process "$StagingLocation\ucmaRuntimeSetup.exe" -ArgumentList "/q" -Wait -Verbose
-
-            # install required Lync Server or Skype for Business Server components
-            Write-Verbose 'Installing Server-Media-Foundation Windows Feature required Lync Server or Skype for Business Server components'
-            Install-WindowsFeature Server-Media-Foundation
         }
-    
         # mount exchange iso
-        Write-Verbose "Mounting Exchange 2016 ISO on $ENV:ComputerName"
-        Mount-DiskImage -ImagePath "$StagingLocation\ExchangeServer2016-x64-CU15.ISO"
+        Write-Verbose "Mounting $ExchangeISO ISO on $ENV:ComputerName"
+        #Mount-DiskImage -ImagePath "$StagingLocation\$ExchangeISO" # need to update for source parameter
 
-        # install exchange 2019 :)
-        Write-Verbose "Installing Exchange 2016 on $ENV:ComputerName"
-        .\Setup.EXE /Mode:Install /Roles:Mailbox,ManagementTools /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents /PrepareAD /T:"F:\Microsoft\Exchange Server\V15\" #update to parameter?
-        .\Setup.EXE /Mode:Install /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents /PrepareAD 
+        # install exchange 2019 :) -- NEED logic for different combo of installs
+        Write-Verbose "Invoking Exchange 2016 installer on $ENV:ComputerName"
+        #.\Setup.EXE /Mode:Install /Roles:Mailbox /on:$OrgName /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents /PrepareAD /T:$InstallPath
+        #.\Setup.EXE /Mode:Install /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents /PrepareAD 
     }
     end{}
+}
 }

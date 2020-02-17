@@ -1,0 +1,1 @@
+"Exchange Schema Version = " + ([ADSI]("LDAP://CN=ms-Exch-Schema-Version-Pt," + ([ADSI]"LDAP://RootDSE").schemaNamingContext)).rangeUpper

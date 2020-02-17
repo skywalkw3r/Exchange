@@ -38,7 +38,7 @@ function Invoke-ExchangeServerInstall {
         [switch]$InstallPreReqs,
 
         [Parameter()]
-        $InstallPath = 'F:\Microsoft\Exchange Server\V15\',
+        $InstallPath = 'P:\Microsoft\Exchange Server\V15',
         
         [Parameter()]
         $OrgName = 'Homelabz',
@@ -47,11 +47,14 @@ function Invoke-ExchangeServerInstall {
         [switch]$PrepareAD,
 
         [Parameter()]
+        [switch]$PrepareSchema,
+
+        [Parameter()]
         [ValidateSet('Mailbox','ManagementTools','EdgeTransport','Mailbox,ManagementTools')]
         $Roles,
 
         [Parameter()]
-        $StagingLocation = 'C:\temp'
+        $StagingLocation = 'C:\temp\exiso'
 
     )
     begin {
@@ -60,7 +63,7 @@ function Invoke-ExchangeServerInstall {
             Write-Verbose "Staging folder does not exist! Creating new directory at $StagingLocation"
             New-Item $StagingLocation -ItemType Directory -Force
         }
-        <#if($InstallPreReqs){
+        if($InstallPreReqs){
             # setup download client
             $webclient = New-Object System.Net.WebClient
 
@@ -80,13 +83,15 @@ function Invoke-ExchangeServerInstall {
             Write-Verbose 'Downloading Unified Communications Managed API 4.0 Runtime'
             $downloadurl = "https://download.microsoft.com/download/2/C/4/2C47A5C1-A1F3-4843-B9FE-84C0032C61EC/UcmaRuntimeSetup.exe"
             $webclient.Downloadfile($downloadurl, "$StagingLocation\ucmaRuntimeSetup.exe")
-        }#>
+            
+            Remove-Object $webclient
+        }
     }
     process {
         if($InstallWindowsComponents){
             # install windows features
-            Install-WindowsFeature ADLDS,NET-Framework-45-Features, Server-Media-Foundation, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-Mgmt, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Lgcy-Mgmt-Console, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, Windows-Identity-Foundation, RSAT-ADDS
-
+            Install-WindowsFeature NET-Framework-45-Features, Server-Media-Foundation, RPC-over-HTTP-proxy, RSAT-Clustering, RSAT-Clustering-CmdInterface, RSAT-Clustering-PowerShell, WAS-Process-Model, Web-Asp-Net45, Web-Basic-Auth, Web-Client-Auth, Web-Digest-Auth, Web-Dir-Browsing, Web-Dyn-Compression, Web-Http-Errors, Web-Http-Logging, Web-Http-Redirect, Web-Http-Tracing, Web-ISAPI-Ext, Web-ISAPI-Filter, Web-Metabase, Web-Mgmt-Console, Web-Mgmt-Service, Web-Net-Ext45, Web-Request-Monitor, Web-Server, Web-Stat-Compression, Web-Static-Content, Web-Windows-Auth, Web-WMI, RSAT-ADDS, ADLDS # only for edge transport?
+        }
         if($InstallPreReqs){
             # install .Net 4.8
             Start-Process "$StagingLocation\ndp48-x86-x64-allos-enu.exe" -ArgumentList "/q /log $StagingLocation\ndp48.log" -Wait -Verbose
@@ -101,17 +106,26 @@ function Invoke-ExchangeServerInstall {
 
             # install Unified Communications Managed API 4.0 Runtime 
             Write-Verbose 'Installing Unified Communications Managed API 4.0 Runtime'
-            Start-Process "$StagingLocation\ucmaRuntimeSetup.exe" -ArgumentList "/q" -Wait -Verbose
+            #Start-Process "$StagingLocation\ucmaRuntimeSetup.exe" -ArgumentList "/q" -Wait -Verbose
+            #Get from ISO?
         }
+        ####REBOOOT???
         # mount exchange iso
         Write-Verbose "Mounting $ExchangeISO ISO on $ENV:ComputerName"
-        #Mount-DiskImage -ImagePath "$StagingLocation\$ExchangeISO" # need to update for source parameter
+        Mount-DiskImage -ImagePath "$StagingLocation\$ExchangeISO" # need to update for source parameter
 
-        # install exchange 2019 :) -- NEED logic for different combo of installs
         Write-Verbose "Invoking Exchange 2016 installer on $ENV:ComputerName"
-        #.\Setup.EXE /Mode:Install /Roles:Mailbox /on:$OrgName /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents /PrepareAD /T:$InstallPath
-        #.\Setup.EXE /Mode:Install /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents /PrepareAD 
+        if($PrepareSchema){
+            Write-Verbose "Invoking PrepareSchema"
+            .\Setup.EXE /PrepareSchema /IAcceptExchangeServerLicenseTerms
+            # error Check Schema after update? "Exchange Schema Version = " + ([ADSI]("LDAP://CN=ms-Exch-Schema-Version-Pt," + ([ADSI]"LDAP://RootDSE").schemaNamingContext)).rangeUpper
+        }
+        if($PrepareAD){ # NEEDED FOR EVER INSTALL MINUS ORGNAME? https://practical365.com/exchange-server/installing-exchange-server-2016/
+            Write-Verbose "Invoking PrepareAD"
+            .\Setup.EXE /PrepareAD /IAcceptExchangeServerLicenseTerms /on:$OrgName    
+        }
+        .\Setup.EXE /IAcceptExchangeServerLicenseTerms /M:Install /R:Mailbox /on:$OrgName /InstallWindowsComponents /t:$InstallPath
+        #.\Setup.EXE /Mode:Install /IAcceptExchangeServerLicenseTerms /InstallWindowsComponents
     }
-    end{}
-}
+    end {}
 }
